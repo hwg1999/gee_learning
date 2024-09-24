@@ -40,5 +40,13 @@ func main() {
 		})
 	})
 
+	r.GET("/hello/:name", func(ctx *gee.Context) {
+		ctx.String(http.StatusOK, "hello %s, you're at %s\n", ctx.Param("name"), ctx.Path)
+	})
+
+	r.GET("/assets/*filepath", func(ctx *gee.Context) {
+		ctx.JSON(http.StatusOK, gee.H{"filepath": ctx.Param("filepath")})
+	})
+
 	r.Run(":9999")
 }
