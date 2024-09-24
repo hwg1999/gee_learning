@@ -2,67 +2,51 @@ package main
 
 import (
 	"gee_web/gee"
+	"log"
 	"net/http"
+	"time"
 )
 
 /*
-(1)
-$ curl -i http://localhost:9999/
-HTTP/1.1 200 OK
-Date: Mon, 12 Aug 2019 16:52:52 GMT
-Content-Length: 18
-Content-Type: text/html; charset=utf-8
+(1) global middleware Logger
+$ curl http://localhost:9999/
 <h1>Hello Gee</h1>
 
-(2)
-$ curl "http://localhost:9999/hello?name=geektutu"
-hello geektutu, you're at /hello
-
-(3)
-$ curl "http://localhost:9999/login" -X POST -d 'username=geektutu&password=1234'
-{"password":"1234","username":"geektutu"}
-
-(4)
-$ curl "http://localhost:9999/xxx"
-404 NOT FOUND: /xxx
+>>> log
+2019/08/17 01:37:38 [200] / in 3.14µs
 */
 
-/* (5)
-$ curl "http://localhost:9999/xxx"
-404 NOT FOUND: /xxx
+/*
+(2) global + group middleware
+$ curl http://localhost:9999/v2/hello/geektutu
+{"message":"Internal Server Error"}
+
+>>> log
+2019/08/17 01:38:48 [200] /v2/hello/geektutu in 61.467µs for group v2
+2019/08/17 01:38:48 [200] /v2/hello/geektutu in 281µs
 */
 
-/* (6)
-$ curl "http://localhost:9999/hello"
-404 NOT FOUND: /hello
-*/
+func onlyForV2() gee.HandlerFunc {
+	return func(ctx *gee.Context) {
+		t := time.Now()
+		ctx.Fail(500, "Internal Server Error")
+		log.Printf("[%d] %s in %v for group v2", ctx.StatusCode, ctx.Req.RequestURI, time.Since(t))
+	}
+}
 
 func main() {
 	r := gee.New()
-	r.GET("/index", func(ctx *gee.Context) { ctx.HTML(http.StatusOK, "<h1>Hello Gee</h1>") })
-
-	v1 := r.Group("/v1")
-	{
-		v1.GET("/", func(ctx *gee.Context) {
-			ctx.HTML(http.StatusOK, "<h1>Hello Gee</h1>")
-		})
-
-		v1.GET("/hello", func(ctx *gee.Context) {
-			ctx.String(http.StatusOK, "hello %s, you're at %s\n", ctx.Qurey("name"), ctx.Path)
-		})
-	}
+	r.Use(gee.Logger())
+	r.GET("/", func(ctx *gee.Context) {
+		ctx.HTML(http.StatusOK, "<h1>Hello Gee</h1>")
+	})
 
 	v2 := r.Group("/v2")
+	v2.Use(onlyForV2())
 	{
-		v2.GET("/hello/:name", func(ctx *gee.Context) {
-			ctx.String(http.StatusOK, "hello %s, you're at %s\n", ctx.Param("name"), ctx.Path)
-		})
-
-		v2.POST("/login", func(ctx *gee.Context) {
-			ctx.JSON(http.StatusOK, gee.H{
-				"username": ctx.PostForm("username"),
-				"password": ctx.PostForm("password"),
-			})
+		v2.GET("/hello/:name", func(c *gee.Context) {
+			// except /hello/geetutu
+			c.String(http.StatusOK, "hello %s, you're at %s\n", c.Param("name"), c.Path)
 		})
 	}
 
